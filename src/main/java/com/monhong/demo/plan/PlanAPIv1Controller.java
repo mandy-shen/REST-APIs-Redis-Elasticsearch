@@ -78,7 +78,7 @@ public class PlanAPIv1Controller {
         service.putObject(jsonObject);
         String id = jsonObject.getString(OBJECT_ID);
         String type = jsonObject.getString(OBJECT_TYPE);
-        String newEtag = etagService.createEtag(id);
+        String newEtag = etagService.createEtag(jsonObject);
 
         // 201 - created
         return ResponseEntity.created(URI.create("/v1/" + type + "/" + id))

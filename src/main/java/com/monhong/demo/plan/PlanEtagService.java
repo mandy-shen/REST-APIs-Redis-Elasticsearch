@@ -1,8 +1,10 @@
 package com.monhong.demo.plan;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 
+import static com.monhong.demo.validator.Constant.OBJECT_ID;
 import static org.springframework.http.HttpHeaders.ETAG;
 
 @Service
@@ -22,9 +24,9 @@ public class PlanEtagService {
         return repository.get(objId, ETAG);
     }
 
-    public String createEtag(String objId) {
-        String etag = DigestUtils.md5Hex(objId);
-        repository.put(objId, ETAG, etag);
+    public String createEtag(JSONObject jsonObject) {
+        String etag = DigestUtils.md5Hex(jsonObject.toString());
+        repository.put(jsonObject.getString(OBJECT_ID), ETAG, etag);
         return etag;
     }
 
