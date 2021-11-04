@@ -1,5 +1,6 @@
-package com.monhong.demo.plan;
+package com.monhong.demo.service;
 
+import com.monhong.demo.dao.PlanRepository;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;

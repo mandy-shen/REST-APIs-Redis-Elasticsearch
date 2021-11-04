@@ -1,5 +1,6 @@
-package com.monhong.demo.plan;
+package com.monhong.demo.service;
 
+import com.monhong.demo.dao.PlanRepository;
 import com.monhong.demo.validator.Validator;
 import org.apache.logging.log4j.util.Strings;
 import org.json.JSONArray;
