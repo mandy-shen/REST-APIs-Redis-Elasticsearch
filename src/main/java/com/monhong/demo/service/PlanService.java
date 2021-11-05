@@ -1,5 +1,6 @@
 package com.monhong.demo.service;
 
+import com.google.common.collect.Lists;
 import com.monhong.demo.dao.RedisDao;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONArray;
@@ -11,22 +12,16 @@ import java.util.*;
 @Service
 public class PlanService {
 
-    private static String SPLITTER_UNDER_SLASH = "_";
-
-    private Map<String,String> relationMap = new HashMap<>();
+    private final static String SPLITTER_UNDER_SLASH = "_";
+    private final Map<String,String> relationMap = new HashMap<>();
+    private final RedisDao redisDao;
 
     /**
      * Avoid field @Autowired
      * https://stackoverflow.com/questions/39890849/what-exactly-is-field-injection-and-how-to-avoid-it
      */
-    private RedisDao redisDao;
-
     public PlanService(RedisDao redisDao) {
         this.redisDao = redisDao;
-    }
-
-    public void create(String key, String value) {
-        redisDao.putValue(key, value);
     }
 
     public boolean hasKey(String key) {
@@ -37,19 +32,11 @@ public class PlanService {
         populate(key, null, true);
     }
 
-    public boolean delete(String key) {
-        return redisDao.deleteValue(key);
-    }
-
-    public String read(String key) {
-        return redisDao.getValue(key).toString();
-    }
-
     public String savePlan(String key, JSONObject object) {
         Map<String, Object> objectMap = nestStore(key, object);
         indexQueue(object, object.getString("objectId"));
 
-        String newEtag = DigestUtils.md5Hex(key);
+        String newEtag = DigestUtils.md5Hex(object.toString());
         redisDao.hSet(key, "eTag", newEtag);
         return newEtag;
     }
@@ -146,9 +133,10 @@ public class PlanService {
             } else if (attributeVal instanceof JSONArray) {
 
                 JSONArray jsonArray = (JSONArray) attributeVal;
+                Iterator<Object> jsonIterator = jsonArray.iterator();
 
-                for (Object o : jsonArray) {
-                    JSONObject embdObject = (JSONObject) o;
+                while (jsonIterator.hasNext()) {
+                    JSONObject embdObject = (JSONObject) jsonIterator.next();
                     embdObject.put("parent_id", uuid);
                     System.out.println(embdObject.toString());
 
@@ -204,14 +192,6 @@ public class PlanService {
         return output;
     }
 
-    public void update(String key, JSONObject object) {
-        traverseNode(object);
-    }
-
-    public void update(JSONObject object) {
-        traverseNode(object);
-    }
-
     public String getEtag(String key, String etag) {
         return redisDao.hGet(key, etag);
     }
@@ -237,13 +217,13 @@ public class PlanService {
                     // store the string object: key-pair
                     Map<Object, Object> objMap = redisDao.hGetAll(key);
 
-                    objMap.forEach((key1, value) -> {
+                    objMap.entrySet().forEach((att) -> {
 
-                        String attKey = (String) key1;
+                        String attKey = (String) att.getKey();
 
                         if (!attKey.equalsIgnoreCase("eTag")) {
-                            String attValue = value.toString();
-                            map.put(attKey, isNumberValue(attValue) ? Integer.parseInt(attValue) : value);
+                            String attValue = att.getValue().toString();
+                            map.put(attKey, isNumberValue(attValue)? Integer.parseInt(attValue) : att.getValue());
                         }
 
                     });
@@ -260,16 +240,12 @@ public class PlanService {
                     List<Object> objectList = new ArrayList<>();
 
                     objSet.forEach((member) -> {
-
                         if (delete) {
-
                             populate(member, null, delete);
                         } else {
                             Map<String, Object> listMap = new HashMap<>();
-
                             objectList.add(populate(member, listMap, delete));
                         }
-
                     });
 
                     if (delete) {
@@ -287,23 +263,19 @@ public class PlanService {
                         Map<Object, Object> values = redisDao.hGetAll(objSet.iterator().next());
                         Map<String, Object> objMap = new HashMap<>();
 
-                        values.forEach((key1, value1) -> {
+                        values.entrySet().forEach((value) -> {
 
-                            String name = key1.toString();
-                            String val = value1.toString();
+                            String name = value.getKey().toString();
+                            String val = value.getValue().toString();
 
-                            objMap.put(name, isNumberValue(val) ? Integer.parseInt(val) : value1);
+                            objMap.put(name, isNumberValue(val)? Integer.parseInt(val) : value.getValue());
 
                         });
 
                         map.put(subKey, objMap);
-
                     }
-
                 }
-
             }
-
         });
 
         return map;

@@ -2,6 +2,7 @@ package com.monhong.demo.ctrl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.monhong.demo.service.AuthorizeService;
 import com.monhong.demo.service.PlanService;
 import com.monhong.demo.validator.Validator;
 import org.everit.json.schema.ValidationException;
@@ -14,7 +15,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 
 import static com.monhong.demo.validator.Constant.*;
@@ -24,11 +32,22 @@ import static com.monhong.demo.validator.Constant.*;
 public class PlanAPIv1Controller {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanAPIv1Controller.class);
-    private static ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private PlanService planService;
-    public PlanAPIv1Controller(PlanService planService) {
+    private final PlanService planService;
+    private final AuthorizeService authorizeService;
+    public PlanAPIv1Controller(PlanService planService, AuthorizeService authorizeService) {
         this.planService = planService;
+        this.authorizeService = authorizeService;
+    }
+
+    @GetMapping(value = "/getToken")
+    public ResponseEntity<String> getToken()
+            throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
+            InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+
+        String token = authorizeService.getToken();
+        return new ResponseEntity<String>(token, HttpStatus.CREATED);
     }
 
     @GetMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -36,23 +55,16 @@ public class PlanAPIv1Controller {
                                       @PathVariable String type,
                                       @PathVariable String id) throws JsonProcessingException {
 
-        logger.info("get DATA: type - " + type + "; id - " + id);
+        logger.info("GET PLAN: " + type + "_" + id);
         String objKey = getObjKey(type, id);
 
-        // authorize
-//        logger.info("AUTHORIZATION: GOOGLE_ID_TOKEN: " + idToken);
-//
-//        if (!authorizationService.authorize(idToken.substring(7))) {
-//            logger.error("TOKEN AUTHORIZATION - google token expired");
-//
-//            String message = MessageUtil.build(MessageEnum.AUTHORIZATION_ERROR);
-//            return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
-//        }
-//        logger.info("TOKEN AUTHORIZATION SUCCESSFUL");
+        String returnValue = authorizeService.authorizeToken(headers);
+        if (!"Valid Token".equals(returnValue))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new JSONObject().put(ERROR, returnValue).toString());
 
         // 404 - NOT_FOUND
         if (!planService.hasKey(objKey)) {
-            logger.info("OBJECT NOT FOUND - " + objKey);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new JSONObject().put(MESSAGE, objKey + " does not exist.").toString());
         }
@@ -61,16 +73,15 @@ public class PlanAPIv1Controller {
 
         // e-tag
         String etag = planService.getEtag(objKey, "eTag");
-        String headerEtag = headers.getFirst(HttpHeaders.IF_NONE_MATCH); // headers-key: case-insensitive
+        String ifNoneMatch = headers.getFirst(HttpHeaders.IF_NONE_MATCH); // headers-key: case-insensitive
 
         // no etag = 200
-        if (etag == null || headerEtag == null) {
+        if (etag == null || ifNoneMatch == null) {
             return ResponseEntity.ok().body(objectMapper.writeValueAsString(foundValue));
         }
 
         // 304 = same etag
-        if (headerEtag.equals(etag)) {
-            logger.info("CACHING AVAILABLE: " + objKey);
+        if (ifNoneMatch.equals(etag)) {
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etag).build();
         }
 
@@ -79,18 +90,15 @@ public class PlanAPIv1Controller {
     }
 
     @PostMapping(value = "/plan", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> create(//@RequestHeader("Authorization") String idToken,
+    public ResponseEntity<String> create(@RequestHeader HttpHeaders headers,
                                          @RequestBody(required = false) String planjson) {
-//        logger.info("GOOGLE-ID_TOKEN:" + idToken);
-        // authorize
-//        if (!authorizationService.authorize(idToken.substring(7))) {
-//            logger.error("TOKEN AUTHORIZATION - google token expired");
-//
-//            String message = MessageUtil.build(MessageEnum.AUTHORIZATION_ERROR);
-//            return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
-//        }
-//        logger.info("TOKEN AUTHORIZATION SUCCESSFUL");
+        logger.info("POST PLAN: ");
 
+        // 401 - UNAUTHORIZED
+        String returnValue = authorizeService.authorizeToken(headers);
+        if (!"Valid Token".equals(returnValue))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new JSONObject().put(ERROR, returnValue).toString());
 
         // 400 - badRequest
         if (planjson == null || planjson.isEmpty()) {
@@ -102,191 +110,144 @@ public class PlanAPIv1Controller {
         try {
             Validator.validate(planjsonObj);
         } catch (ValidationException ex) {
-            logger.info("VALIDATING ERROR: SCHEMA NOT MATCH - " + ex.getMessage());
             return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
         }
 
-        // 409 - CONFLICT
-        if (planService.hasKey(getObjKey(planjsonObj))) {
+        // 409 - CONFLICT, objKey already exists
+        String objKey = getObjKey(planjsonObj);
+        if (planService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new JSONObject().put(MESSAGE, "objectId is existed.").toString());
         }
 
-        logger.info("CREATING NEW DATA: key - " + getObjKey(planjsonObj));
+        logger.info("CREATING NEW DATA: key - " + objKey);
         String id = planjsonObj.getString(OBJECT_ID);
         String type = planjsonObj.getString(OBJECT_TYPE);
-        String newEtag = planService.savePlan(getObjKey(planjsonObj), planjsonObj);
+        String newEtag = planService.savePlan(objKey, planjsonObj);
 
-        // 201 - created
+        // 201 - created, return newEtag
         return ResponseEntity.created(URI.create("/v1/" + type + "/" + id))
                 .eTag(newEtag).body(new JSONObject().put(OBJECT_ID, id).put(OBJECT_TYPE, type).toString());
     }
 
-    @DeleteMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> delete(@PathVariable String type, @PathVariable String id) {
-        logger.info("DELETE type: " + type + ", id - " + id);
-        String objKey = getObjKey(type, id);
+    @DeleteMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> delete(@RequestHeader HttpHeaders headers,
+                                         @PathVariable String id) {
+        logger.info("DELETE PLAN: plan_" + id);
+        String objKey = getObjKey("plan", id);
 
-        // authorize
-//        logger.info("AUTHORIZATION: GOOGLE_ID_TOKEN: " + idToken);
-//
-//        if (!authorizationService.authorize(idToken.substring(7))) {
-//            logger.error("TOKEN AUTHORIZATION - google token expired");
-//
-//            String message = MessageUtil.build(MessageEnum.AUTHORIZATION_ERROR);
-//            return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
-//        }
-//        logger.info("TOKEN AUTHORIZATION SUCCESSFUL");
+        // 401 - UNAUTHORIZED
+        String returnValue = authorizeService.authorizeToken(headers);
+        if (!"Valid Token".equals(returnValue))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new JSONObject().put(ERROR, returnValue).toString());
 
+        // 404 - objKey NOT_FOUND
         if (!planService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new JSONObject().put(MESSAGE, "objectId does not exist.").toString());
+                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
+        // delete old plan
         planService.deletePlan(objKey);
-        logger.info("DELETED SUCCESSFULLY: " + objKey);
+//        //save plan to MQ
+//        messageQueueService.addToMessageQueue(objectId, true);
 
         return ResponseEntity.ok().body(new JSONObject().put(MESSAGE, "objectId is deleted.").toString());
     }
 
 
-    @PatchMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> patch(//@RequestHeader(value = "authorization", required = false) String idToken,
-                                            @RequestHeader(value = "If-Match", required = false) String ifMatch,
-                                            @PathVariable String type,
-                                            @PathVariable String id,
-                                            @RequestBody(required = false) String planjson) {
+    @PatchMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> patch(@RequestHeader HttpHeaders headers,
+                                        @PathVariable String id,
+                                        @RequestBody String planjson) {
 
-        logger.info("PATCH PLAN: " + type + ":" + id);
-        String objKey = getObjKey(type, id);
+        logger.info("PATCH PLAN: plan_" + id);
+        String objKey = getObjKey("plan", id);
 
-        // check authorization
-//        if (!authorizationService.authorize(idToken.substring(7))) {
-//            logger.error("TOKEN AUTHORIZATION - google token expired");
-//
-//            String message = MessageUtil.build(MessageEnum.AUTHORIZATION_ERROR);
-//            return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
-//        }
-//        logger.info("TOKEN AUTHORIZATION SUCCESSFUL");
+        // 401 - UNAUTHORIZED
+        String returnValue = authorizeService.authorizeToken(headers);
+        if (!"Valid Token".equals(returnValue))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new JSONObject().put(ERROR, returnValue).toString());
 
-        // 400 - badRequest
-        if (planjson == null || planjson.isEmpty()) {
-            return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, "Request body is empty.").toString());
-        }
-
-        // 400 - validate error badRequest
-        JSONObject planjsonObj = new JSONObject(planjson);
-        try {
-            Validator.validate(planjsonObj);
-        } catch (ValidationException ex) {
-            logger.info("VALIDATING ERROR: SCHEMA NOT MATCH - " + ex.getMessage());
-            return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
-        }
-
-        // etag check
-        String planEtag = planService.getEtag(objKey, "eTag");
-
+        // 428 - PRECONDITION_REQUIRED = no if-match
+        String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH);
         if (ifMatch == null) {
-            logger.info("HEADER DOES NOT HAVE IF_MATCH");
-            return ResponseEntity
-                    .status(HttpStatus.PRECONDITION_REQUIRED)
-                    .body(new JSONObject().put(MESSAGE, "header If_match missing").toString());
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(new JSONObject().put(MESSAGE, "header does not have If-Match").toString());
         }
 
-        if (!ifMatch.equals(planEtag)) {
-            logger.info("CONFLICT");
-            return ResponseEntity
-                    .status(HttpStatus.PRECONDITION_FAILED)
-                    .body(new JSONObject().put(MESSAGE, "header If_match does not match").toString());
+        // 412 - PRECONDITION_FAILED = if-match is different
+        String etag = planService.getEtag(objKey, "eTag");
+        if (!ifMatch.equals(etag)) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
+                    .eTag(etag)
+                    .body(new JSONObject().put(MESSAGE, "If-Match is different").toString());
         }
 
-        // check plan exist
+        // 404 - objKey NOT_FOUND
         if (!planService.hasKey(objKey)) {
-            logger.info(objKey + " does not exist");
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(new JSONObject().put(MESSAGE, objKey + " does not exist").toString());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
-        // delete old plan
-        planService.deletePlan(objKey);
+        // add new subObject of plan
+        String newEtag = planService.savePlan(objKey, new JSONObject(planjson));
 
-        // update plan
-        planService.savePlan(objKey, new JSONObject(planjson));
-        logger.info(objKey + " updates successfully");
-
-        return ResponseEntity
-                .ok()
-                .eTag(planEtag)
-                .body(new JSONObject().put(MESSAGE, objKey + " updates successfully").toString());
+        // 200 - ok, return newEtag
+        return ResponseEntity.ok().eTag(newEtag)
+                .body(new JSONObject().put(MESSAGE, "Resource updated successfully").toString());
     }
 
-    @PutMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> update(//@RequestHeader(value = "authorization", required = false) String idToken,
-                                             @RequestHeader(value = "If-Match", required = false) String ifMatch,
-                                             @PathVariable String type,
-                                             @PathVariable String id,
-                                             @RequestBody(required = false) String planjson) {
-        logger.info("PUT PLAN: " + type + ":" + id);
-        String objKey = getObjKey(type, id);
+    @PutMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> update(@RequestHeader HttpHeaders headers,
+                                         @PathVariable String id,
+                                         @RequestBody String planjson) {
+        logger.info("PUT PLAN: plan_" + id);
+        String objKey = getObjKey("plan", id);
 
-        // check authorization
-//        if (!authorizationService.authorize(idToken.substring(7))) {
-//            logger.error("TOKEN AUTHORIZATION - google token expired");
-//
-//            String message = MessageUtil.build(MessageEnum.AUTHORIZATION_ERROR);
-//            return new ResponseEntity<>(message, HttpStatus.BAD_REQUEST);
-//        }
-//        logger.info("TOKEN AUTHORIZATION SUCCESSFUL");
-
-        // 400 - badRequest
-        if (planjson == null || planjson.isEmpty()) {
-            return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, "Request body is empty.").toString());
-        }
+        // 401 - UNAUTHORIZED
+        String returnValue = authorizeService.authorizeToken(headers);
+        if (!"Valid Token".equals(returnValue))
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new JSONObject().put(ERROR, returnValue).toString());
 
         // 400 - validate error badRequest
         JSONObject planjsonObj = new JSONObject(planjson);
         try {
             Validator.validate(planjsonObj);
         } catch (ValidationException ex) {
-            logger.info("VALIDATING ERROR: SCHEMA NOT MATCH - " + ex.getMessage());
             return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
         }
 
-        // etag check
-        String planEtag = planService.getEtag(objKey, "eTag");
-
+        // 428 - PRECONDITION_REQUIRED = no if-match
+        String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH);
         if (ifMatch == null) {
-            logger.info("HEADER DOES NOT HAVE IF_MATCH");
-            return ResponseEntity
-                    .status(HttpStatus.PRECONDITION_REQUIRED)
-                    .body(new JSONObject().put(MESSAGE, "header If_match missing").toString());
+            return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED)
+                    .body(new JSONObject().put(MESSAGE, "header does not have If-Match").toString());
         }
 
-        if (!ifMatch.equals(planEtag)) {
-            logger.info("CONFLICT");
-            return ResponseEntity
-                    .status(HttpStatus.PRECONDITION_FAILED)
-                    .body(new JSONObject().put(MESSAGE, "header If_match does not match").toString());
+        // 412 - PRECONDITION_FAILED = if-match is different, return actual planEtag
+        String etag = planService.getEtag(objKey, "eTag");
+        if (!ifMatch.equals(etag)) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
+                    .eTag(etag)
+                    .body(new JSONObject().put(MESSAGE, "If-Match is different").toString());
         }
 
-        // check plan exist
+        // 404 - objKey NOT_FOUND
         if (!planService.hasKey(objKey)) {
-            logger.info(objKey + " does not exist");
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(new JSONObject().put(MESSAGE, objKey + " does not exist").toString());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
         // delete old plan
         planService.deletePlan(objKey);
+        // create new plan
+        String newEtag = planService.savePlan(objKey, planjsonObj);
 
-        // update plan
-        planService.savePlan(objKey, new JSONObject(planjson));
-        logger.info(objKey + " updates successfully");
-
-        return ResponseEntity
-                .ok()
-                .eTag(planEtag)
-                .body(new JSONObject().put(MESSAGE, objKey + " updates successfully").toString());
+        // 200 - ok, return newEtag
+        return ResponseEntity.ok().eTag(newEtag)
+                .body(new JSONObject().put(MESSAGE, "Resource updated successfully").toString());
     }
 }
