@@ -1,4 +1,4 @@
-package com.monhong.demo.validator;
+package com.monhong.demo.util;
 
 import org.json.JSONObject;
 

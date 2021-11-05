@@ -2,9 +2,9 @@ package com.monhong.demo.ctrl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.monhong.demo.service.AuthorizeService;
 import com.monhong.demo.service.PlanService;
-import com.monhong.demo.validator.Validator;
+import com.monhong.demo.util.JsonValidator;
+import com.monhong.demo.util.JwtOAuth;
 import org.everit.json.schema.ValidationException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -15,39 +15,31 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-import java.io.UnsupportedEncodingException;
 import java.net.URI;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 
-import static com.monhong.demo.validator.Constant.*;
+import static com.monhong.demo.util.Constant.*;
 
 @RequestMapping("/v1")
 @RestController
 public class PlanAPIv1Controller {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanAPIv1Controller.class);
+
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final PlanService planService;
-    private final AuthorizeService authorizeService;
-    public PlanAPIv1Controller(PlanService planService, AuthorizeService authorizeService) {
+
+    public PlanAPIv1Controller(PlanService planService) {
         this.planService = planService;
-        this.authorizeService = authorizeService;
     }
 
-    @GetMapping(value = "/getToken")
-    public ResponseEntity<String> getToken()
-            throws UnsupportedEncodingException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
-            InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-
-        String token = authorizeService.getToken();
-        return new ResponseEntity<String>(token, HttpStatus.CREATED);
+    // only for demo, do not public your token!!!!
+    @GetMapping(value = "/genToken")
+    public ResponseEntity<String> getToken() throws NoSuchAlgorithmException {
+        String token = JwtOAuth.genJwt();
+        return new ResponseEntity<>(token, HttpStatus.CREATED);
     }
 
     @GetMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -58,7 +50,7 @@ public class PlanAPIv1Controller {
         logger.info("GET PLAN: " + type + "_" + id);
         String objKey = getObjKey(type, id);
 
-        String returnValue = authorizeService.authorizeToken(headers);
+        String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
@@ -95,7 +87,7 @@ public class PlanAPIv1Controller {
         logger.info("POST PLAN: ");
 
         // 401 - UNAUTHORIZED
-        String returnValue = authorizeService.authorizeToken(headers);
+        String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
@@ -108,7 +100,7 @@ public class PlanAPIv1Controller {
         // 400 - validate error badRequest
         JSONObject planjsonObj = new JSONObject(planjson);
         try {
-            Validator.validate(planjsonObj);
+            JsonValidator.validate(planjsonObj);
         } catch (ValidationException ex) {
             return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
         }
@@ -136,7 +128,7 @@ public class PlanAPIv1Controller {
         String objKey = getObjKey("plan", id);
 
         // 401 - UNAUTHORIZED
-        String returnValue = authorizeService.authorizeToken(headers);
+        String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
@@ -165,7 +157,7 @@ public class PlanAPIv1Controller {
         String objKey = getObjKey("plan", id);
 
         // 401 - UNAUTHORIZED
-        String returnValue = authorizeService.authorizeToken(headers);
+        String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
@@ -207,7 +199,7 @@ public class PlanAPIv1Controller {
         String objKey = getObjKey("plan", id);
 
         // 401 - UNAUTHORIZED
-        String returnValue = authorizeService.authorizeToken(headers);
+        String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
@@ -215,7 +207,7 @@ public class PlanAPIv1Controller {
         // 400 - validate error badRequest
         JSONObject planjsonObj = new JSONObject(planjson);
         try {
-            Validator.validate(planjsonObj);
+            JsonValidator.validate(planjsonObj);
         } catch (ValidationException ex) {
             return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
         }

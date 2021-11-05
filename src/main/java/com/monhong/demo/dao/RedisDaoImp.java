@@ -10,7 +10,7 @@ import java.util.Set;
 @Repository
 public class RedisDaoImp implements RedisDao {
 
-    private StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
     public RedisDaoImp(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -23,7 +23,7 @@ public class RedisDaoImp implements RedisDao {
 
     @Override
     public boolean deleteValue(String key) {
-        return redisTemplate.delete(key);
+        return Boolean.TRUE.equals(redisTemplate.delete(key));
     }
 
     @Override
@@ -53,7 +53,7 @@ public class RedisDaoImp implements RedisDao {
 
     @Override
     public boolean hasKey(String key) {
-        return redisTemplate.hasKey(key);
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
     }
 
     @Override

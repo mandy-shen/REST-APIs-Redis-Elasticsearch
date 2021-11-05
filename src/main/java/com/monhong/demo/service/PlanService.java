@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+import static com.monhong.demo.util.Constant.getObjKey;
+
 @Service
 public class PlanService {
 
@@ -60,7 +62,7 @@ public class PlanService {
         // traverse all attributes for store
         while (keys.hasNext()) {
 
-            String objectKey = jsonObject.getString("objectType") + "_" + jsonObject.getString("objectId");
+            String objectKey = getObjKey(jsonObject);
 
             String attName = keys.next();
             Object attValue = jsonObject.get(attName);
@@ -282,7 +284,7 @@ public class PlanService {
     }
 
     private boolean isNumberValue(String strNum) {
-        if (strNum == null)
+        if (strNum == null || strNum.isBlank())
             return false;
 
         try {
