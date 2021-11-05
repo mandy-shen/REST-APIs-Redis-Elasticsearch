@@ -1,6 +1,5 @@
 package com.monhong.demo.service;
 
-import com.google.common.collect.Lists;
 import com.monhong.demo.dao.RedisDao;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONArray;
