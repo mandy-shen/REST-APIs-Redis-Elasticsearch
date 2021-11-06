@@ -95,7 +95,7 @@ public class JwtOAuth {
 
 			return now.before(expiration);
 		} catch (Exception e) {
-			e.printStackTrace();
+			System.out.println("error: " + e.getMessage());
 		}
 		return false;
 	}

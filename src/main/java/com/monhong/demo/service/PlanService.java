@@ -55,29 +55,48 @@ public class PlanService {
         Map<String, Map<String, Object>> objMap = new HashMap<>();
         Map<String, Object> valueMap = new HashMap<>();
 
-        // traverse all attributes for store
-        for (String key : jsonObject.keySet()) {
-            String objectKey = getObjKey(jsonObject);
-            Object obj = jsonObject.get(key);
+        // get all attributes
+        Iterator<String> keys = jsonObject.keySet().iterator();
 
-            if (obj instanceof JSONObject) {
-                // type - Object
-                Map<String, Map<String, Object>> ObjValueMap = traverseNode((JSONObject) obj);
-                String transitiveKey = objectKey + "_" + key;
+        // traverse all attributes for store
+        while (keys.hasNext()) {
+
+            String objectKey = getObjKey(jsonObject);
+
+            String attName = keys.next();
+            Object attValue = jsonObject.get(attName);
+
+            // type - Object
+            if (attValue instanceof JSONObject) {
+
+                attValue = traverseNode((JSONObject) attValue);
+
+                Map<String, Map<String, Object>> ObjValueMap = (HashMap<String, Map<String, Object>>) attValue;
+
+                String transitiveKey = objectKey + "_" + attName;
                 redisDao.setAdd(transitiveKey, ObjValueMap.entrySet().iterator().next().getKey());
-            } else if (obj instanceof JSONArray) {
+            } else if (attValue instanceof JSONArray) {
+
                 // type - Array
-                List<HashMap<String, HashMap<String, Object>>> formatList = (List<HashMap<String, HashMap<String, Object>>>) obj;
+                attValue = getNodeList((JSONArray)attValue);
+
+                List<HashMap<String, HashMap<String, Object>>> formatList = (List<HashMap<String, HashMap<String, Object>>>) attValue;
                 formatList.forEach((listObject) -> {
-                    listObject.forEach((key1, value) -> {
-                        String internalKey = objectKey + "_" + key;
-                        redisDao.setAdd(internalKey, key1);
+
+                    listObject.entrySet().forEach((listEntry) -> {
+
+                        String internalKey = objectKey + "_" + attName;
+
+                        redisDao.setAdd(internalKey, listEntry.getKey());
+
                     });
+
                 });
             } else {
                 // type - Object
-                redisDao.hSet(objectKey, key, obj.toString());
-                valueMap.put(key, obj);
+                redisDao.hSet(objectKey, attName, attValue.toString());
+
+                valueMap.put(attName, attValue);
                 objMap.put(objectKey, valueMap);
             }
 
@@ -115,11 +134,12 @@ public class PlanService {
             } else if (attributeVal instanceof JSONArray) {
 
                 JSONArray jsonArray = (JSONArray) attributeVal;
+                Iterator<Object> jsonIterator = jsonArray.iterator();
 
-                for (Object obj : jsonArray) {
-                    JSONObject embdObject = (JSONObject) obj;
+                while (jsonIterator.hasNext()) {
+                    JSONObject embdObject = (JSONObject) jsonIterator.next();
                     embdObject.put("parent_id", uuid);
-                    System.out.println(embdObject);
+                    System.out.println(embdObject.toString());
 
                     String embd_uuid = embdObject.getString("objectId");
                     relationMap.put(embd_uuid, uuid);
@@ -157,9 +177,9 @@ public class PlanService {
 
         attValue.forEach((e) -> {
             if (e instanceof JSONObject) {
-                e = traverseNode((JSONObject) e);
+                e = traverseNode((JSONObject )e);
             } else if (e instanceof JSONArray) {
-                e = getNodeList((JSONArray) e);
+                e = getNodeList((JSONArray)e);
             }
             list.add(e);
         });
@@ -178,7 +198,7 @@ public class PlanService {
     }
 
     // populate plan nested node
-    public Map<String, Object> populate(String objectKey, Map<String, Object> map, boolean isDelete) {
+    public Map<String, Object> populate(String objectKey, Map<String, Object> map, boolean delete) {
 
         // get all attributes
         Set<String> keys = redisDao.keys(objectKey + "*");
@@ -191,20 +211,22 @@ public class PlanService {
             // process key : value
             if (key.equals(objectKey)) {
 
-                if (isDelete) {
+                if (delete) {
                     redisDao.deleteKey(key);
                 } else {
 
                     // store the string object: key-pair
                     Map<Object, Object> objMap = redisDao.hGetAll(key);
 
-                    objMap.forEach((key1, value) -> {
-                        String attKey = (String) key1;
+                    objMap.entrySet().forEach((att) -> {
+
+                        String attKey = (String) att.getKey();
 
                         if (!attKey.equalsIgnoreCase("eTag")) {
-                            String attValue = value.toString();
-                            map.put(attKey, isNumberValue(attValue) ? Integer.parseInt(attValue) : value);
+                            String attValue = att.getValue().toString();
+                            map.put(attKey, isNumberValue(attValue)? Integer.parseInt(attValue) : att.getValue());
                         }
+
                     });
                 }
             } else {
@@ -219,33 +241,36 @@ public class PlanService {
                     List<Object> objectList = new ArrayList<>();
 
                     objSet.forEach((member) -> {
-                        if (isDelete) {
-                            populate(member, null, isDelete);
+                        if (delete) {
+                            populate(member, null, delete);
                         } else {
                             Map<String, Object> listMap = new HashMap<>();
-                            objectList.add(populate(member, listMap, isDelete));
+                            objectList.add(populate(member, listMap, delete));
                         }
                     });
 
-                    if (isDelete) {
+                    if (delete) {
                         redisDao.deleteKey(key);
                     } else {
                         map.put(subKey, objectList);
                     }
                 } else {
                     // process nested object
-                    if (isDelete) {
+
+                    if (delete) {
                         redisDao.deleteKeys(Arrays.asList(key, objSet.iterator().next()));
                     } else {
 
                         Map<Object, Object> values = redisDao.hGetAll(objSet.iterator().next());
                         Map<String, Object> objMap = new HashMap<>();
 
-                        values.forEach((key1, value1) -> {
-                            String name = key1.toString();
-                            String val = value1.toString();
+                        values.entrySet().forEach((value) -> {
 
-                            objMap.put(name, isNumberValue(val) ? Integer.parseInt(val) : value1);
+                            String name = value.getKey().toString();
+                            String val = value.getValue().toString();
+
+                            objMap.put(name, isNumberValue(val)? Integer.parseInt(val) : value.getValue());
+
                         });
 
                         map.put(subKey, objMap);
@@ -263,7 +288,7 @@ public class PlanService {
 
         try {
             Integer.parseInt(strNum);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException nfe) {
             return false;
         }
 
