@@ -14,6 +14,7 @@ import java.util.Date;
  * JwtOAuth: Digital signatures
  * https://connect2id.com/products/nimbus-jose-jwt/algorithm-selection-guide
  * https://wstutorial.com/misc/jwt-java-public-key-rsa.html
+ * ps. ID tokens != access tokens
  *
  * use cases:
  * 1. ID tokens (OpenID Connect)
@@ -24,7 +25,6 @@ import java.util.Date;
  * two ways to verify token signature:
  * 1. https://jwt.io/
  * 2. https://oauth2.googleapis.com/tokeninfo?id_token=your_generated_token
- * ps. ID tokens != access tokens
   */
 public class JwtOAuth {
 

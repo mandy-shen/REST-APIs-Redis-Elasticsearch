@@ -49,6 +49,11 @@ public class PlanAPIv1Controller {
                 .body(new JSONObject().put("token", token).toString());
     }
 
+    @PostMapping(value = "/validate")
+    public String verifyToken(@RequestHeader HttpHeaders headers) {
+        return JwtOAuth.authorizeToken(headers);
+    }
+
     @GetMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> get(@RequestHeader HttpHeaders headers,
                                       @PathVariable String type,
