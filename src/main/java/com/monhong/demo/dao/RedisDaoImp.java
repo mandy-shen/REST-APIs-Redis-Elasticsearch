@@ -17,26 +17,6 @@ public class RedisDaoImp implements RedisDao {
     }
 
     @Override
-    public void putValue(String key, String value) {
-        redisTemplate.opsForValue().set(key, value);
-    }
-
-    @Override
-    public boolean deleteValue(String key) {
-        return Boolean.TRUE.equals(redisTemplate.delete(key));
-    }
-
-    @Override
-    public Object getValue(String key) {
-        return redisTemplate.opsForValue().get(key);
-    }
-
-    @Override
-    public void hSet(String key, String field, String value) {
-        redisTemplate.opsForHash().put(key, field, value);
-    }
-
-    @Override
     public void deleteKey(String key) {
         redisTemplate.delete(key);
     }
@@ -47,13 +27,13 @@ public class RedisDaoImp implements RedisDao {
     }
 
     @Override
-    public Set<String> keys(String keyPattern) {
-        return redisTemplate.keys(keyPattern);
+    public boolean deleteValue(String key) {
+        return Boolean.TRUE.equals(redisTemplate.delete(key));
     }
 
     @Override
-    public boolean hasKey(String key) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    public String getValue(String key) {
+        return redisTemplate.opsForValue().get(key);
     }
 
     @Override
@@ -62,8 +42,13 @@ public class RedisDaoImp implements RedisDao {
     }
 
     @Override
-    public void setAdd(String key, String value) {
-        redisTemplate.opsForSet().add(key, value);
+    public void hDelete(String key) {
+        redisTemplate.opsForHash().delete(key);
+    }
+
+    @Override
+    public String hGet(String key, String field) {
+        return (String) redisTemplate.opsForHash().get(key, field);
     }
 
     @Override
@@ -72,8 +57,23 @@ public class RedisDaoImp implements RedisDao {
     }
 
     @Override
-    public void hDelete(String key) {
-        redisTemplate.opsForHash().delete(key);
+    public void hSet(String key, String field, String value) {
+        redisTemplate.opsForHash().put(key, field, value);
+    }
+
+    @Override
+    public boolean hasKey(String key) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
+
+    @Override
+    public Set<String> keys(String keyPattern) {
+        return redisTemplate.keys(keyPattern);
+    }
+
+    @Override
+    public void putValue(String key, String value) {
+        redisTemplate.opsForValue().set(key, value);
     }
 
     @Override
@@ -82,7 +82,7 @@ public class RedisDaoImp implements RedisDao {
     }
 
     @Override
-    public String hGet(String key, String field) {
-        return (String) redisTemplate.opsForHash().get(key, field);
+    public void setAdd(String key, String value) {
+        redisTemplate.opsForSet().add(key, value);
     }
 }

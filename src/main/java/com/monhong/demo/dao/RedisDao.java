@@ -5,33 +5,47 @@ import java.util.Map;
 import java.util.Set;
 
 public interface RedisDao {
-
-    void putValue(String key, String value);
-
-    boolean deleteValue(String key);
-
-    Object getValue(String key);
-
-    void hSet(String key, String field, String value);
-
-    void hDelete(String key, String field);
-
-    void setAdd(String key, String value);
-
-    boolean hasKey(String key);
-
-    Set<String> keys(String keyPattern);
-
+    // normal
     void deleteKey(String key);
 
+    // normal
     void deleteKeys(Collection<String> keys);
 
-    Map<Object, Object> hGetAll(String key);
+    // normal
+    boolean deleteValue(String key);
 
+    // normal
+    String getValue(String key);
+
+    // hash (hashmap)
+    void hDelete(String key, String field);
+
+    // hash (hashmap)
     void hDelete(String key);
 
+    // hash (hashmap)
+    String hGet(String key, String field);
+
+    // hash (hashmap)
+    Map<Object, Object> hGetAll(String key);
+
+    // hash (hashmap)
+    void hSet(String key, String field, String value);
+
+    // normal
+    boolean hasKey(String key);
+
+    // normal
+    Set<String> keys(String keyPattern);
+
+    // normal
+    void putValue(String key, String value);
+
+    // set (hashset)
     Set<String> sMembers(String key);
 
-    String hGet(String key, String field);
+    // set (hashset)
+    void setAdd(String key, String value);
+
 }
 

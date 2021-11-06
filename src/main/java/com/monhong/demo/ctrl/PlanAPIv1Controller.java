@@ -36,10 +36,17 @@ public class PlanAPIv1Controller {
     }
 
     // only for demo, do not public your token!!!!
-    @GetMapping(value = "/genToken")
-    public ResponseEntity<String> getToken() throws NoSuchAlgorithmException {
+    @PostMapping(value = "/token", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> genToken() throws NoSuchAlgorithmException {
         String token = JwtOAuth.genJwt();
-        return new ResponseEntity<>(token, HttpStatus.CREATED);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Cache-Control", "no-store");
+        headers.set("Pragma", "no-cache");
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .headers(headers)
+                .body(new JSONObject().put("token", token).toString());
     }
 
     @GetMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

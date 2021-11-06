@@ -7,11 +7,13 @@ import org.springframework.http.HttpHeaders;
 
 import java.security.*;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 
 /**
  * JwtOAuth: Digital signatures
  * https://connect2id.com/products/nimbus-jose-jwt/algorithm-selection-guide
+ * https://wstutorial.com/misc/jwt-java-public-key-rsa.html
  *
  * use cases:
  * 1. ID tokens (OpenID Connect)
@@ -19,11 +21,17 @@ import java.util.Date;
  * 3. Passing security assertions and tokens between domains
  * 4. Data which integrity and authenticity must be verifiable by others
  *
+ * two ways to verify token signature:
+ * 1. https://jwt.io/
+ * 2. https://oauth2.googleapis.com/tokeninfo?id_token=your_generated_token
  * ps. ID tokens != access tokens
   */
 public class JwtOAuth {
-	private static final String subject = "Mandy";
-	private static final String issuer = "mandy.com";
+
+	private static final String subject = "user123"; // clientId
+	private static final String issuer = "info7255"; // auth server provider
+	private static final String audience = "mandy.com"; // resource provider
+	private static final String jwtId = "jwtId123";
 	private static PublicKey publicKey;
 	private static PrivateKey privateKey;
 
@@ -31,6 +39,7 @@ public class JwtOAuth {
 	// Always keep your private keys secret!!!!
 	// do not public your token!!!!, this is just for demo.
 	public static String genJwt() throws NoSuchAlgorithmException {
+
 		// generate public/private key pair
 		// it should be generated for one time, just for demo.
 		if (privateKey == null) {
@@ -39,14 +48,25 @@ public class JwtOAuth {
 			keyGenerator.initialize(2048);
 
 			KeyPair kp = keyGenerator.genKeyPair();
-			publicKey = (PublicKey) kp.getPublic();
-			privateKey = (PrivateKey) kp.getPrivate();
+			publicKey = kp.getPublic();
+			privateKey = kp.getPrivate();
+
+			// encode key pairs, so that to minimum the size and verify the signature on jwt.io website
+			System.out.println("---------------------------------------");
+			System.out.println("publicKey: " + Base64.getEncoder().encodeToString(publicKey.getEncoded()));
+			System.out.println("privateKey: " + Base64.getEncoder().encodeToString(privateKey.getEncoded()));
+			System.out.println("---------------------------------------");
 		}
 
 		// new token
-		return Jwts.builder().setSubject(subject)
+		return Jwts.builder().setHeaderParam("type", "JWT")
+				.setSubject(subject)
 				.setIssuer(issuer)
-				.setExpiration(Date.from(Instant.now().plusSeconds(60 * 10))) // 10min
+				.claim("name", "Mandy")
+				.setAudience(audience)
+				.setId(jwtId)
+				.setIssuedAt(Date.from(Instant.now()))
+				.setExpiration(Date.from(Instant.now().plusSeconds(60 * 10))) // 10min -- too long, just for demo.
 				// RS256 with privateKey
 				.signWith(SignatureAlgorithm.RS256, privateKey).compact();
 	}
