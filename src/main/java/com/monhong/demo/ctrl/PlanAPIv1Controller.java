@@ -40,12 +40,9 @@ public class PlanAPIv1Controller {
     public ResponseEntity<String> genToken() throws NoSuchAlgorithmException {
         String token = JwtOAuth.genJwt();
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Cache-Control", "no-store");
-        headers.set("Pragma", "no-cache");
-
         return ResponseEntity.status(HttpStatus.CREATED)
-                .headers(headers)
+                .header("Cache-Control", "no-store")
+                .header("Pragma", "no-cache")
                 .body(new JSONObject().put("token", token).toString());
     }
 
@@ -151,12 +148,23 @@ public class PlanAPIv1Controller {
                     .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
+        // 412 - PRECONDITION_FAILED = if-match is different
+        String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH); // optional??
+        String etag = planService.getEtag(objKey, "eTag");
+        if (ifMatch != null && !etag.equals(ifMatch)) {
+            return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
+                    .eTag(etag)
+                    .body(new JSONObject().put(MESSAGE, "If-Match is different").toString());
+        }
+
         // delete old plan
         planService.deletePlan(objKey);
 //        //save plan to MQ
 //        messageQueueService.addToMessageQueue(objectId, true);
 
-        return ResponseEntity.ok().body(new JSONObject().put(MESSAGE, "objectId is deleted.").toString());
+        // 204 - NO_CONTENT
+        return ResponseEntity.status(HttpStatus.NO_CONTENT)
+                .body(new JSONObject().put(MESSAGE, "objectId is deleted.").toString());
     }
 
 
@@ -174,6 +182,12 @@ public class PlanAPIv1Controller {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(ERROR, returnValue).toString());
 
+        // 404 - objKey NOT_FOUND
+        if (!planService.hasKey(objKey)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
+        }
+
         // 428 - PRECONDITION_REQUIRED = no if-match
         String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH);
         if (ifMatch == null) {
@@ -187,12 +201,6 @@ public class PlanAPIv1Controller {
             return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
                     .eTag(etag)
                     .body(new JSONObject().put(MESSAGE, "If-Match is different").toString());
-        }
-
-        // 404 - objKey NOT_FOUND
-        if (!planService.hasKey(objKey)) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
         // add new subObject of plan
@@ -224,6 +232,12 @@ public class PlanAPIv1Controller {
             return ResponseEntity.badRequest().body(new JSONObject().put(ERROR, ex.getMessage()).toString());
         }
 
+        // 404 - objKey NOT_FOUND
+        if (!planService.hasKey(objKey)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
+        }
+
         // 428 - PRECONDITION_REQUIRED = no if-match
         String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH);
         if (ifMatch == null) {
@@ -237,12 +251,6 @@ public class PlanAPIv1Controller {
             return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
                     .eTag(etag)
                     .body(new JSONObject().put(MESSAGE, "If-Match is different").toString());
-        }
-
-        // 404 - objKey NOT_FOUND
-        if (!planService.hasKey(objKey)) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new JSONObject().put(MESSAGE, "ObjectId does not exist").toString());
         }
 
         // delete old plan
