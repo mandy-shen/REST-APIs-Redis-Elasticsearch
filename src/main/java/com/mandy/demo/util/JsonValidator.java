@@ -1,4 +1,4 @@
-package com.monhong.demo.util;
+package com.mandy.demo.util;
 
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.loader.SchemaLoader;

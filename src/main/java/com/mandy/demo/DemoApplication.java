@@ -1,4 +1,4 @@
-package com.monhong.demo;
+package com.mandy.demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

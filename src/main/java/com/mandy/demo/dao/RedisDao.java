@@ -1,4 +1,4 @@
-package com.monhong.demo.dao;
+package com.mandy.demo.dao;
 
 import java.util.Collection;
 import java.util.Map;

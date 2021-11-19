@@ -1,4 +1,4 @@
-package com.monhong.demo.dao;
+package com.mandy.demo.dao;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;

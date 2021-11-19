@@ -1,6 +1,7 @@
-package com.monhong.demo.service;
+package com.mandy.demo.service;
 
-import com.monhong.demo.dao.RedisDao;
+import com.mandy.demo.dao.RedisDao;
+import com.mandy.demo.util.Constant;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -8,7 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
-import static com.monhong.demo.util.Constant.getObjKey;
+import static com.mandy.demo.util.Constant.getObjKey;
 
 @Service
 public class PlanService {
@@ -61,7 +62,7 @@ public class PlanService {
         // traverse all attributes for store
         while (keys.hasNext()) {
 
-            String objectKey = getObjKey(jsonObject);
+            String objectKey = Constant.getObjKey(jsonObject);
 
             String attName = keys.next();
             Object attValue = jsonObject.get(attName);

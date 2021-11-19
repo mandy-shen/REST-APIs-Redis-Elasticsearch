@@ -1,4 +1,4 @@
-package com.monhong.demo.config;
+package com.mandy.demo.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
