@@ -2,25 +2,30 @@ package com.mandy.demo.ctrl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mandy.demo.service.JsonService;
 import com.mandy.demo.service.PlanService;
 import com.mandy.demo.util.Constant;
 import com.mandy.demo.util.JsonValidator;
 import com.mandy.demo.util.JwtOAuth;
 import org.everit.json.schema.ValidationException;
 import org.json.JSONObject;
+import org.json.JSONTokener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import redis.clients.jedis.Jedis;
 
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
-@RequestMapping("/v1")
+//@RequestMapping("/v1")
 @RestController
 public class PlanAPIv1Controller {
 
@@ -29,10 +34,14 @@ public class PlanAPIv1Controller {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final PlanService planService;
-
     public PlanAPIv1Controller(PlanService planService) {
         this.planService = planService;
     }
+
+    private Jedis cache = new Jedis();
+    @Autowired(required = false)
+    JsonService jsonService;
+
 
     // only for demo, do not public your token!!!!
     @PostMapping(value = "/token", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -58,26 +67,27 @@ public class PlanAPIv1Controller {
         logger.info("GET PLAN: " + type + "_" + id);
         String objKey = Constant.getObjKey(type, id);
 
+        // 401 - UNAUTHORIZED
         String returnValue = JwtOAuth.authorizeToken(headers);
         if (!"Valid Token".equals(returnValue))
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - NOT_FOUND
-        if (!planService.hasKey(objKey)) {
+        if (!jsonService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new JSONObject().put(Constant.MESSAGE, objKey + " does not exist.").toString());
         }
 
-        Map<String, Object> foundValue = planService.getPlan(objKey);
+        JSONObject jsonObject = jsonService.getPlan(objKey);
 
         // e-tag
-        String etag = planService.getEtag(objKey, "eTag");
+        String etag = jsonService.getEtag(objKey);
         String ifNoneMatch = headers.getFirst(HttpHeaders.IF_NONE_MATCH); // headers-key: case-insensitive
 
         // no etag = 200
         if (etag == null || ifNoneMatch == null) {
-            return ResponseEntity.ok().body(objectMapper.writeValueAsString(foundValue));
+            return ResponseEntity.ok().body(jsonObject.toString());
         }
 
         // 304 = same etag
@@ -86,12 +96,12 @@ public class PlanAPIv1Controller {
         }
 
         // 200 = different etag = show redis etag
-        return ResponseEntity.ok().eTag(etag).body(objectMapper.writeValueAsString(foundValue));
+        return ResponseEntity.ok().eTag(etag).body(jsonObject.toString());
     }
 
     @PostMapping(value = "/plan", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> create(@RequestHeader HttpHeaders headers,
-                                         @RequestBody(required = false) String planjson) {
+                                         @RequestBody(required = false) String planjson) throws NoSuchAlgorithmException {
         logger.info("POST PLAN: ");
 
         // 401 - UNAUTHORIZED
@@ -115,14 +125,21 @@ public class PlanAPIv1Controller {
 
         // 409 - CONFLICT, objKey already exists
         String objKey = Constant.getObjKey(planjsonObj);
-        if (planService.hasKey(objKey)) {
+        if (jsonService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new JSONObject().put(Constant.MESSAGE, "objectId is existed.").toString());
         }
 
         logger.info("CREATING NEW DATA: key - " + objKey);
         String id = planjsonObj.getString(Constant.OBJECT_ID);
         String type = planjsonObj.getString(Constant.OBJECT_TYPE);
-        String newEtag = planService.savePlan(objKey, planjsonObj);
+        jsonService.savePlan(planjsonObj, type);
+
+        JSONObject jsonObject = jsonService.getPlan(objKey);
+        String newEtag = jsonService.newEtag(objKey, jsonObject);
+
+        Set<String> nameSet = new HashSet<>();
+        JSONObject cloneJsonObject = new JSONObject(new JSONTokener(planjson));
+        jsonService.sendEachObject(cloneJsonObject, type, id, type, type+"_join", nameSet, null, null,"SAVE");
 
         // 201 - created, return newEtag
         return ResponseEntity.created(URI.create("/v1/" + type + "/" + id))
@@ -142,14 +159,14 @@ public class PlanAPIv1Controller {
                     .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - objKey NOT_FOUND
-        if (!planService.hasKey(objKey)) {
+        if (!jsonService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new JSONObject().put(Constant.MESSAGE, "ObjectId does not exist").toString());
         }
 
         // 412 - PRECONDITION_FAILED = if-match is different
         String ifMatch = headers.getFirst(HttpHeaders.IF_MATCH); // optional??
-        String etag = planService.getEtag(objKey, "eTag");
+        String etag = jsonService.getEtag(objKey);
         if (ifMatch != null && !etag.equals(ifMatch)) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
                     .eTag(etag)
@@ -157,9 +174,8 @@ public class PlanAPIv1Controller {
         }
 
         // delete old plan
-        planService.deletePlan(objKey);
-//        //save plan to MQ
-//        messageQueueService.addToMessageQueue(objectId, true);
+        jsonService.deletePlan(objKey);
+        jsonService.delEtag(objKey);
 
         // 204 - NO_CONTENT
         return ResponseEntity.status(HttpStatus.NO_CONTENT)
@@ -170,7 +186,7 @@ public class PlanAPIv1Controller {
     @PatchMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> patch(@RequestHeader HttpHeaders headers,
                                         @PathVariable String id,
-                                        @RequestBody String planjson) {
+                                        @RequestBody String planjson) throws JsonProcessingException {
 
         logger.info("PATCH PLAN: plan_" + id);
         String objKey = Constant.getObjKey("plan", id);
@@ -182,7 +198,7 @@ public class PlanAPIv1Controller {
                     .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - objKey NOT_FOUND
-        if (!planService.hasKey(objKey)) {
+        if (!jsonService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new JSONObject().put(Constant.MESSAGE, "ObjectId does not exist").toString());
         }
@@ -195,7 +211,7 @@ public class PlanAPIv1Controller {
         }
 
         // 412 - PRECONDITION_FAILED = if-match is different
-        String etag = planService.getEtag(objKey, "eTag");
+        String etag = jsonService.getEtag(objKey);
         if (!ifMatch.equals(etag)) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
                     .eTag(etag)
@@ -203,7 +219,14 @@ public class PlanAPIv1Controller {
         }
 
         // add new subObject of plan
-        String newEtag = planService.savePlan(objKey, new JSONObject(planjson));
+        JSONObject allJsonObj = jsonService.mergeJson(new JSONObject(planjson), objKey);
+        objKey = jsonService.updatePlan(allJsonObj, "plan");
+
+        JSONObject jsonObject = jsonService.getPlan(objKey);
+        String newEtag = jsonService.newEtag(objKey, jsonObject);
+
+        Set<String> nameSet = new HashSet<>();
+        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", nameSet, null, null, "SAVE");
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)
@@ -213,7 +236,7 @@ public class PlanAPIv1Controller {
     @PutMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> update(@RequestHeader HttpHeaders headers,
                                          @PathVariable String id,
-                                         @RequestBody String planjson) {
+                                         @RequestBody String planjson) throws NoSuchAlgorithmException {
         logger.info("PUT PLAN: plan_" + id);
         String objKey = Constant.getObjKey("plan", id);
 
@@ -232,7 +255,7 @@ public class PlanAPIv1Controller {
         }
 
         // 404 - objKey NOT_FOUND
-        if (!planService.hasKey(objKey)) {
+        if (!jsonService.hasKey(objKey)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new JSONObject().put(Constant.MESSAGE, "ObjectId does not exist").toString());
         }
@@ -245,7 +268,7 @@ public class PlanAPIv1Controller {
         }
 
         // 412 - PRECONDITION_FAILED = if-match is different, return actual planEtag
-        String etag = planService.getEtag(objKey, "eTag");
+        String etag = jsonService.getEtag(objKey);
         if (!ifMatch.equals(etag)) {
             return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED)
                     .eTag(etag)
@@ -253,9 +276,14 @@ public class PlanAPIv1Controller {
         }
 
         // delete old plan
-        planService.deletePlan(objKey);
         // create new plan
-        String newEtag = planService.savePlan(objKey, planjsonObj);
+        objKey = jsonService.updatePlan(new JSONObject(planjson), "plan");
+
+        JSONObject jsonObject = jsonService.getPlan(objKey);
+        String newEtag = jsonService.newEtag(objKey, jsonObject);
+
+        Set<String> nameSet = new HashSet<>();
+        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", nameSet, null, null,"SAVE");
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)

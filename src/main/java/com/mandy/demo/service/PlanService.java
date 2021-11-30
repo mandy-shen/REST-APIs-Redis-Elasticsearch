@@ -9,8 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
-import static com.mandy.demo.util.Constant.getObjKey;
-
 @Service
 public class PlanService {
 
@@ -196,6 +194,10 @@ public class PlanService {
 
     public String getEtag(String key, String etag) {
         return redisDao.hGet(key, etag);
+    }
+
+    public void delEtag(String key, String etag) {
+        redisDao.hDelete(key, etag);
     }
 
     // populate plan nested node
