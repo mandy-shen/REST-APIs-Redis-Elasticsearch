@@ -1,9 +1,6 @@
 package com.mandy.demo.ctrl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mandy.demo.service.JsonService;
-import com.mandy.demo.service.PlanService;
 import com.mandy.demo.util.Constant;
 import com.mandy.demo.util.JsonValidator;
 import com.mandy.demo.util.JwtOAuth;
@@ -18,12 +15,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import redis.clients.jedis.Jedis;
 
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
-import java.util.Set;
 
 //@RequestMapping("/v1")
 @RestController
@@ -31,16 +26,8 @@ public class PlanAPIv1Controller {
 
     private static final Logger logger = LoggerFactory.getLogger(PlanAPIv1Controller.class);
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    private final PlanService planService;
-    public PlanAPIv1Controller(PlanService planService) {
-        this.planService = planService;
-    }
-
-    private Jedis cache = new Jedis();
     @Autowired(required = false)
-    JsonService jsonService;
+    private JsonService jsonService;
 
 
     // only for demo, do not public your token!!!!
@@ -62,16 +49,10 @@ public class PlanAPIv1Controller {
     @GetMapping(value = "/{type}/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> get(@RequestHeader HttpHeaders headers,
                                       @PathVariable String type,
-                                      @PathVariable String id) throws JsonProcessingException {
+                                      @PathVariable String id) {
 
         logger.info("GET PLAN: " + type + "_" + id);
         String objKey = Constant.getObjKey(type, id);
-
-        // 401 - UNAUTHORIZED
-        String returnValue = JwtOAuth.authorizeToken(headers);
-        if (!"Valid Token".equals(returnValue))
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - NOT_FOUND
         if (!jsonService.hasKey(objKey)) {
@@ -101,14 +82,8 @@ public class PlanAPIv1Controller {
 
     @PostMapping(value = "/plan", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> create(@RequestHeader HttpHeaders headers,
-                                         @RequestBody(required = false) String planjson) throws NoSuchAlgorithmException {
+                                         @RequestBody(required = false) String planjson) {
         logger.info("POST PLAN: ");
-
-        // 401 - UNAUTHORIZED
-        String returnValue = JwtOAuth.authorizeToken(headers);
-        if (!"Valid Token".equals(returnValue))
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 400 - badRequest
         if (planjson == null || planjson.isEmpty()) {
@@ -137,9 +112,8 @@ public class PlanAPIv1Controller {
         JSONObject jsonObject = jsonService.getPlan(objKey);
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
-        Set<String> nameSet = new HashSet<>();
         JSONObject cloneJsonObject = new JSONObject(new JSONTokener(planjson));
-        jsonService.sendEachObject(cloneJsonObject, type, id, type, type+"_join", nameSet, null, null,"SAVE");
+        jsonService.sendEachObject(cloneJsonObject, type, id, type, type+"_join", new HashSet<>(), null, null,"SAVE");
 
         // 201 - created, return newEtag
         return ResponseEntity.created(URI.create("/v1/" + type + "/" + id))
@@ -151,12 +125,6 @@ public class PlanAPIv1Controller {
                                          @PathVariable String id) {
         logger.info("DELETE PLAN: plan_" + id);
         String objKey = Constant.getObjKey("plan", id);
-
-        // 401 - UNAUTHORIZED
-        String returnValue = JwtOAuth.authorizeToken(headers);
-        if (!"Valid Token".equals(returnValue))
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - objKey NOT_FOUND
         if (!jsonService.hasKey(objKey)) {
@@ -186,16 +154,10 @@ public class PlanAPIv1Controller {
     @PatchMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> patch(@RequestHeader HttpHeaders headers,
                                         @PathVariable String id,
-                                        @RequestBody String planjson) throws JsonProcessingException {
+                                        @RequestBody String planjson) {
 
         logger.info("PATCH PLAN: plan_" + id);
         String objKey = Constant.getObjKey("plan", id);
-
-        // 401 - UNAUTHORIZED
-        String returnValue = JwtOAuth.authorizeToken(headers);
-        if (!"Valid Token".equals(returnValue))
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 404 - objKey NOT_FOUND
         if (!jsonService.hasKey(objKey)) {
@@ -225,8 +187,7 @@ public class PlanAPIv1Controller {
         JSONObject jsonObject = jsonService.getPlan(objKey);
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
-        Set<String> nameSet = new HashSet<>();
-        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", nameSet, null, null, "SAVE");
+        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", new HashSet<>(), null, null, "SAVE");
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)
@@ -236,15 +197,9 @@ public class PlanAPIv1Controller {
     @PutMapping(value = "/plan/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> update(@RequestHeader HttpHeaders headers,
                                          @PathVariable String id,
-                                         @RequestBody String planjson) throws NoSuchAlgorithmException {
+                                         @RequestBody String planjson) {
         logger.info("PUT PLAN: plan_" + id);
         String objKey = Constant.getObjKey("plan", id);
-
-        // 401 - UNAUTHORIZED
-        String returnValue = JwtOAuth.authorizeToken(headers);
-        if (!"Valid Token".equals(returnValue))
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new JSONObject().put(Constant.ERROR, returnValue).toString());
 
         // 400 - validate error badRequest
         JSONObject planjsonObj = new JSONObject(planjson);
@@ -282,8 +237,7 @@ public class PlanAPIv1Controller {
         JSONObject jsonObject = jsonService.getPlan(objKey);
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
-        Set<String> nameSet = new HashSet<>();
-        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", nameSet, null, null,"SAVE");
+        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", new HashSet<>(), null, null, "SAVE");
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)

@@ -102,6 +102,10 @@ public class JwtOAuth {
 
 	public static String authorizeToken(HttpHeaders headers) {
 		String authorization = headers.getFirst("Authorization");
+		return authorizeToken(authorization);
+	}
+
+	public static String authorizeToken(String authorization) {
 		if (authorization == null || authorization.isBlank()) {
 			return "No token Found";
 		}

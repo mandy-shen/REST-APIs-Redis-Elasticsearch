@@ -2,7 +2,6 @@ package com.mandy.demo.service;
 
 
 import org.apache.http.HttpHeaders;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpPut;
@@ -12,199 +11,89 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 @Component
 public class QueueListenerService {
 
-    public int tempCount = 0;
-
-
-    public String global_uri = "";
-    public String global_indexName = "";
+    private static final Logger logger = LoggerFactory.getLogger(QueueListenerService.class);
 
     public void receiveMessage(Map<String, String> message) {
-        System.out.println("Message received: " + message);
+        System.out.println(" ------------------------ Message received START ------------------------");
+        logger.info("Message received: " + message);
+
         String operation = message.get("operation");
         String uri = message.get("uri");
         String body = message.get("body");
-        String indexName = message.getOrDefault("index","plan");
+        String indexName = message.getOrDefault("index", "plan");
         String mainObjectId = message.getOrDefault("mainObjectId", "1");
-
-        global_uri = uri;
-        global_indexName = indexName;
-
-
 
         switch (operation) {
             case "SAVE": {
                 JSONObject jsonBody = new JSONObject(body);
-                System.out.println("SAVE OPERATION CALLED FOR "+jsonBody.getString("objectType") + " : "+ jsonBody.getString("objectId"));
-                this.indexObject(global_uri, global_indexName, jsonBody, mainObjectId);
+                String type = jsonBody.getString("objectType");
+                String id = jsonBody.getString("objectId");
+
+                logger.info("SAVE OPERATION CALLED FOR " + type + " : " + id);
+                putObject(uri, indexName, jsonBody, mainObjectId);
                 break;
             }
             case "DELETE": {
-                this.deleteIndex(uri, indexName, body);
+                logger.info("DELETE OPERATION CALLED FOR " + body);
+                deleteIndex(uri, indexName, body);
                 break;
             }
         }
+        System.out.println(" ------------------------ Message received END ------------------------");
     }
 
     private int executeRequest(HttpUriRequest request) {
-        int result = 0;
+        int statusCode = 0;
         try (CloseableHttpClient httpClient = HttpClients.createDefault();
              CloseableHttpResponse response = httpClient.execute(request)) {
-            if(response.getStatusLine().getStatusCode() > 299){
-                System.out.println("ElasticSearch Response: " + response.getStatusLine().toString());
+
+            statusCode = response.getStatusLine().getStatusCode();
+            if(statusCode > 299){
+                logger.info("ElasticSearch getStatusLine: " + response.getStatusLine().toString());
             }
-            System.out.println("ElasticSearch Response: " + EntityUtils.toString(response.getEntity()));
-            result = response.getStatusLine().getStatusCode();
-        } catch (ClientProtocolException e) {
-            e.printStackTrace();
+            logger.info("ElasticSearch getEntity: " + EntityUtils.toString(response.getEntity()));
+
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return result;
+        return statusCode;
     }
 
-    private JSONObject printTest(JSONObject object, String mainObjectType, String mainObjectID, String thiskey, String joinName,Map<String, Set<String>> relationMap) {
+    private void putObject(String uri, String indexName, JSONObject objectBody, String mainObjectId) {
+        String url = uri + "/" + indexName + "/_doc/" + objectBody.getString("objectId") + "?routing=" + mainObjectId;
 
-        JSONObject thisObjectOnly = new JSONObject();
+        logger.info("HttpPut=" + url);
+        HttpPut request = new HttpPut(url);
 
-//        System.out.println(" printTest() CALLED!!!!!!!!!!! -  | mainObjectType : "+mainObjectType+" | mainObjectID : "+mainObjectID);
-        System.out.println(" =================================================XXXXXXX | "+thiskey+" | START -  "+ tempCount++ +"  XXXXXXXXX=================================================  ");
-        JSONObject obj = new JSONObject();
-
-        for (String key : object.keySet()) {
-            Object value = object.get(key);
-
-
-            if (value instanceof JSONObject) {
-
-                JSONObject nestedObj = new JSONObject();
-                JSONObject nestedProperties = printTest((JSONObject) value, mainObjectType, mainObjectID, key,joinName,relationMap);
-                if (nestedProperties.length() > 0) {
-                    nestedObj.put("properties", nestedProperties);
-                }
-
-                nestedObj.put("type", "nested");
-                obj.put(key, nestedObj);
-
-            } else if (value instanceof JSONArray) {
-                JSONArray jsonArray = (JSONArray) value;
-                for (Object object1 : jsonArray) {
-                    printTest((JSONObject) object1, mainObjectType, mainObjectID, key, joinName,relationMap);
-                }
-            } else {
-                thisObjectOnly.put(key, value);
-            }
-        }
-
-        System.out.println(" --------------------- ------------------- " + thiskey + " -----------------------");
-
-        if (!mainObjectType.equals(thisObjectOnly.get("objectType"))) {
-            JSONObject childJoin = new JSONObject();
-            childJoin.put("name", thisObjectOnly.getString("objectType"));
-            childJoin.put("parent", mainObjectID);
-            thisObjectOnly.put(joinName, childJoin);
-
-            Set<String> rSet = relationMap.getOrDefault(global_indexName, new HashSet<String>());
-            rSet.add(thisObjectOnly.getString("objectType"));
-            relationMap.put(global_indexName, rSet);
-
-        }
-
-        System.out.println(thisObjectOnly.toString(6));
-
-        this.indexObject(global_uri, global_indexName, thisObjectOnly, mainObjectID);
-        System.out.println(" --------------------- ------------------- -----------------------");
-
-
-        System.out.println(" =================================================XXXXXXXX END XXXXXXXX=================================================  ");
-        return obj;
-
-    }
-
-
-    private JSONObject getMappingJSON(JSONObject object, String mainObjectType, String mainObjectID) {
-
-
-        JSONObject obj = new JSONObject();
-
-        for (String key : object.keySet()) {
-            Object value = object.get(key);
-            if (value instanceof JSONObject) {
-                JSONObject nestedObj = new JSONObject();
-                JSONObject nestedProperties = getMappingJSON((JSONObject) value, mainObjectType, mainObjectID);
-                if (nestedProperties.length() > 0) {
-                    nestedObj.put("properties", nestedProperties);
-                }
-
-
-                nestedObj.put("type", "nested");
-
-
-
-                obj.put(key, nestedObj);
-
-
-
-
-            } else if (value instanceof JSONArray) {
-
-
-                JSONArray jsonArray  = (JSONArray) value;
-
-
-                JSONObject nestedObj = new JSONObject();
-                JSONObject nestedProperties = getMappingJSON(((JSONArray) value).getJSONObject(0), mainObjectType, mainObjectID);
-                if (nestedProperties.length() > 0) {
-                    nestedObj.put("properties", nestedProperties);
-                }
-                nestedObj.put("type", "nested");
-                obj.put(key, nestedObj);
-            }
-        }
-
-        return obj;
-    }
-
-
-    public String getJoinName(String indexName, String subname){
-        return indexName+"_"+subname;
-    }
-
-    private void indexObject(String uri, String indexName, JSONObject objectBody, String mainObjectId) {
-
-        if(mainObjectId == null || mainObjectId.isEmpty() || mainObjectId.trim().equals("")){
-            mainObjectId="1";
-        }
-
-        System.out.println("com.tejas.bdidemo.listener.IndexingListener.indexObject()");
-        System.out.println(uri + "/" + indexName + "/_doc/" + objectBody.getString("objectId"));
-        HttpPut request = new HttpPut(uri + "/" + indexName + "/_doc/" + objectBody.getString("objectId") + "?routing="+ mainObjectId);
-        request.addHeader(HttpHeaders.CONTENT_TYPE, String.valueOf(ContentType.APPLICATION_JSON));
         try {
+            request.addHeader(HttpHeaders.CONTENT_TYPE, String.valueOf(ContentType.APPLICATION_JSON));
             request.setEntity(new StringEntity(objectBody.toString()));
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
 
-        int executeRequest = this.executeRequest(request);
+        executeRequest(request);
     }
 
     private void deleteIndex(String uri, String indexName, String objectId) {
-        HttpDelete request = new HttpDelete(uri + "/" + indexName + "/_doc/" + objectId);
+        String url = uri + "/" + indexName + "/_doc/" + objectId;
 
-        this.executeRequest(request);
+        logger.info("HttpDelete=" + url);
+        HttpDelete request = new HttpDelete(url);
+
+        executeRequest(request);
     }
 }
 
