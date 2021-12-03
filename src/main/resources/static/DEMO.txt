@@ -1,0 +1,94 @@
+DELETE .geoip_databases
+DELETE .kibana-event-log-7.15.2-000001
+DELETE .apm-custom-link
+DELETE .apm-agent-configuration
+DELETE .kibana_7.15.2_001
+DELETE .kibana_task_manager_7.15.2_001
+DELETE .kibana_task_manager_7.15.2_001
+DELETE plan
+
+
+GET /_mapping
+GET _cat/indices
+
+
+# create child/parent mappings
+PUT plan
+{
+  "mappings": {
+    "properties": {
+      "objectId": {
+        "type": "keyword"
+      },
+      "plan_join": {
+        "type": "join",
+        "relations" : {
+          "plan": ["planCostShares", "linkedPlanServices"],
+          "linkedPlanServices": ["linkedService", "planserviceCostShares"]
+        }
+      }
+    }
+  }
+}
+
+# query all
+GET plan/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+
+# simple query
+GET plan/_search
+{
+  "query": {
+    "match": {
+      "_id": "1234vxc2324sdf-501"
+    }
+  }
+}
+
+# has_child query
+GET plan/_search
+{
+  "query": {
+    "has_child": {
+      "type": "planserviceCostShares",
+      "query": {
+        "range": {
+          "copay": {
+            "gte": 1
+          }
+        }
+      }
+    }
+  }
+}
+
+# has_child query
+GET plan/_search
+{
+  "query": {
+    "has_child": {
+      "type": "planserviceCostShares",
+      "query": {
+        "match_all": {}
+      }
+    }
+  }
+}
+
+
+# has_parent query
+GET plan/_search
+{
+  "query": {
+    "has_parent": {
+      "parent_type": "plan",
+      "query": {
+        "match_all": {}
+      }
+    }
+  }
+}

@@ -34,7 +34,7 @@ public class JsonService {
 
     public String savePlan(JSONObject json, String objectType) {
         // temp array of keys to remove from json object
-        ArrayList<String> keysToDelete = new ArrayList<String>();
+        ArrayList<String> keysToDelete = new ArrayList<>();
 
         // Iterate through the json
         for(String key : json.keySet()) {
@@ -116,7 +116,7 @@ public class JsonService {
         jedis.close();
 
         Iterator<String> keysIterator = jsonRelatedKeys.iterator();
-        while(keysIterator.hasNext()) {
+        while (keysIterator.hasNext()) {
             String partObjKey = keysIterator.next();
             String partObjectKey = partObjKey.substring(partObjKey.lastIndexOf('_')+1);
 
@@ -183,7 +183,7 @@ public class JsonService {
         jedis.close();
 
         Iterator<String> keysIterator = jsonRelatedKeys.iterator();
-        while(keysIterator.hasNext()) {
+        while (keysIterator.hasNext()) {
             String partObjKey = keysIterator.next();
             String partObjectKey = partObjKey.substring(partObjKey.lastIndexOf('_')+1);
 
@@ -317,8 +317,6 @@ public class JsonService {
     }
 
     private int getIndexOfObjectId(JSONArray array, String objectId) {
-
-
         for (int i = 0; i < array.length(); i++) {
             JSONObject arrayObj = (JSONObject)array.get(i);
             String itemId = (String)arrayObj.get("objectId");
@@ -326,7 +324,6 @@ public class JsonService {
                 return i;
             }
         }
-
         return -1;
     }
 
@@ -342,7 +339,6 @@ public class JsonService {
             return;
         }
 
-//        String thisJoinName = object.getString("objectType") + "_join";
         String thisObjectId = object.getString("objectId");
         String myDeclaredName = object.getString("objectType");
         if (nameSet.contains(object.getString("objectType"))) {
@@ -399,9 +395,9 @@ public class JsonService {
         //USING parent's information to declare myself a child
         if (!(parentJoinName == null && parentId == null)) {
             System.out.println(" -- -- -- ");
-            System.out.println(" Declaring Myself a Child whith parent join name : " + parentJoinName);
+            System.out.println(" Declaring Myself a Child with parent join name : " + parentJoinName);
             JSONObject childJoin = new JSONObject();
-            childJoin.put("name", myDeclaredName);
+            childJoin.put("name", thiskey);
             childJoin.put("parent", parentId);
             thisObjectOnly.put(parentJoinName, childJoin);
             System.out.println(childJoin.toString(6));
@@ -409,9 +405,6 @@ public class JsonService {
 
         }
 
-//        Set<String> rSet = relationMap.getOrDefault(mainObjectType, new HashSet<String>());
-//        rSet.add(thisObjectOnly.getString("objectType"));
-//        relationMap.put(mainObjectType, rSet);
         System.out.println(thisObjectOnly.toString(6));
 
         // index object
@@ -420,7 +413,7 @@ public class JsonService {
         actionMap.put("uri", ELASTIC_URL);
         actionMap.put("index", "plan");
         actionMap.put("body", thisObjectOnly.toString());
-        actionMap.put("mainObjectId", mainObjectID);
+        actionMap.put("mainObjectId", parentId);
 
         System.out.println("Sending message: " + actionMap);
 
