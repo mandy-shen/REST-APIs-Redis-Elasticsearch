@@ -28,10 +28,10 @@ public class AuthFilter implements Filter {
             }
         } else if ("/validate".equals(request.getServletPath())) {
             // path /validate skip filter..
-//        } else if (!"Valid Token".equals(token)) {
-//            // 401 - UNAUTHORIZED
-//            errorResponse(response, token);
-//            return;
+        } else if (!"Valid Token".equals(token)) {
+            // 401 - UNAUTHORIZED
+            errorResponse(response, token);
+            return;
         }
 
         filterChain.doFilter(request, response);
