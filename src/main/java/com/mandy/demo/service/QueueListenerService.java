@@ -33,7 +33,7 @@ public class QueueListenerService {
         String uri = message.get("uri");
         String body = message.get("body");
         String indexName = message.getOrDefault("index", "plan");
-        String mainObjectId = message.getOrDefault("mainObjectId", "1");
+        String parentId = message.getOrDefault("parentId", "1");
 
         switch (operation) {
             case "SAVE": {
@@ -42,25 +42,24 @@ public class QueueListenerService {
                 String id = jsonBody.getString("objectId");
 
                 logger.info("SAVE OPERATION CALLED FOR " + type + " : " + id);
-                putObject(uri, indexName, jsonBody, mainObjectId);
+                putIndex(uri, indexName, jsonBody, parentId);
                 break;
             }
             case "DELETE": {
                 logger.info("DELETE OPERATION CALLED FOR " + body);
-                deleteIndex(uri, indexName, body);
+                delIndex(uri, indexName, body);
                 break;
             }
         }
         System.out.println(" ------------------------ Message received END ------------------------");
     }
 
-    private int executeRequest(HttpUriRequest request) {
-        int statusCode = 0;
+    private void execReq(HttpUriRequest request) {
         try (CloseableHttpClient httpClient = HttpClients.createDefault();
              CloseableHttpResponse response = httpClient.execute(request)) {
 
-            statusCode = response.getStatusLine().getStatusCode();
-            if(statusCode > 299){
+            int statusCode = response.getStatusLine().getStatusCode();
+            if(statusCode >= 300){
                 logger.info("ElasticSearch getStatusLine: " + response.getStatusLine().toString());
             }
             logger.info("ElasticSearch getEntity: " + EntityUtils.toString(response.getEntity()));
@@ -68,11 +67,10 @@ public class QueueListenerService {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return statusCode;
     }
 
-    private void putObject(String uri, String indexName, JSONObject objectBody, String mainObjectId) {
-        String url = uri + "/" + indexName + "/_doc/" + objectBody.getString("objectId") + "?routing=" + mainObjectId;
+    private void putIndex(String uri, String indexName, JSONObject objectBody, String parentId) {
+        String url = uri + "/" + indexName + "/_doc/" + objectBody.getString("objectId") + "?routing=" + parentId;
 
         logger.info("HttpPut=" + url);
         HttpPut request = new HttpPut(url);
@@ -84,16 +82,16 @@ public class QueueListenerService {
             e.printStackTrace();
         }
 
-        executeRequest(request);
+        execReq(request);
     }
 
-    private void deleteIndex(String uri, String indexName, String objectId) {
+    private void delIndex(String uri, String indexName, String objectId) {
         String url = uri + "/" + indexName + "/_doc/" + objectId;
 
         logger.info("HttpDelete=" + url);
         HttpDelete request = new HttpDelete(url);
 
-        executeRequest(request);
+        execReq(request);
     }
 }
 

@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.security.NoSuchAlgorithmException;
-import java.util.HashSet;
 
 //@RequestMapping("/v1")
 @RestController
@@ -113,7 +112,7 @@ public class PlanAPIv1Controller {
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
         JSONObject cloneJsonObject = new JSONObject(new JSONTokener(planjson));
-        jsonService.sendEachObject(cloneJsonObject, type, id, type, type+"_join", new HashSet<>(), null, null,"SAVE");
+        jsonService.sendObject(cloneJsonObject, type, null);
 
         // 201 - created, return newEtag
         return ResponseEntity.created(URI.create("/v1/" + type + "/" + id))
@@ -187,7 +186,7 @@ public class PlanAPIv1Controller {
         JSONObject jsonObject = jsonService.getPlan(objKey);
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
-        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", new HashSet<>(), null, null, "SAVE");
+        jsonService.sendObject(jsonObject, "plan", null);
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)
@@ -237,7 +236,7 @@ public class PlanAPIv1Controller {
         JSONObject jsonObject = jsonService.getPlan(objKey);
         String newEtag = jsonService.newEtag(objKey, jsonObject);
 
-        jsonService.sendEachObject(jsonObject, "plan", id, "plan", "plan"+"_join", new HashSet<>(), null, null, "SAVE");
+        jsonService.sendObject(jsonObject, "plan", null);
 
         // 200 - ok, return newEtag
         return ResponseEntity.ok().eTag(newEtag)

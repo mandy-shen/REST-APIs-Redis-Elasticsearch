@@ -13,7 +13,10 @@ import java.security.NoSuchAlgorithmException;
 public class AuthFilter implements Filter {
 
     @Override
-    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws ServletException, IOException {
+    public void doFilter(ServletRequest servletRequest,
+                         ServletResponse servletResponse,
+                         FilterChain filterChain) throws ServletException, IOException {
+
         HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
 
@@ -30,14 +33,14 @@ public class AuthFilter implements Filter {
             // path /validate skip filter..
         } else if (!"Valid Token".equals(token)) {
             // 401 - UNAUTHORIZED
-            errorResponse(response, token);
+            errRes(response, token);
             return;
         }
 
         filterChain.doFilter(request, response);
     }
 
-    public void errorResponse(HttpServletResponse response, String json) throws IOException {
+    public void errRes(HttpServletResponse response, String json) throws IOException {
         JSONObject newJsonObj = new JSONObject();
         newJsonObj.put(Constant.ERROR, json);
 
