@@ -1,18 +1,11 @@
-DELETE .geoip_databases
-DELETE .kibana-event-log-7.15.2-000001
-DELETE .apm-custom-link
-DELETE .apm-agent-configuration
-DELETE .kibana_7.15.2_001
-DELETE .kibana_task_manager_7.15.2_001
-DELETE .kibana_task_manager_7.15.2_001
 DELETE plan
 
-
+GET _nodes/NODE_NAME/stats/indices?pretty
 GET /_mapping
 GET _cat/indices
 
 
-# create child/parent mappings
+# create child/parent mappings first before Postman Post
 PUT plan
 {
   "mappings": {
