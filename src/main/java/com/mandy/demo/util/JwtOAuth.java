@@ -29,7 +29,7 @@ import java.util.Date;
 public class JwtOAuth {
 
 	private static final String subject = "user123"; // clientId
-	private static final String issuer = "info7255"; // auth server provider
+	private static final String issuer = "auth123"; // auth server provider
 	private static final String audience = "mandy.com"; // resource provider
 	private static final String jwtId = "jwtId123";
 	private static PublicKey publicKey;
