@@ -66,7 +66,7 @@ public class JwtOAuth {
 				.setAudience(audience)
 				.setId(jwtId)
 				.setIssuedAt(Date.from(Instant.now()))
-				.setExpiration(Date.from(Instant.now().plusSeconds(60 * 10))) // 10min -- too long, just for demo.
+				.setExpiration(Date.from(Instant.now().plusSeconds(60 * 10))) // 10min -- too long, just for demo. Normally would be 1~2 mins
 				// RS256 with privateKey
 				.signWith(SignatureAlgorithm.RS256, privateKey).compact();
 	}
